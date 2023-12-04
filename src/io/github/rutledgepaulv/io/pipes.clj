@@ -1,10 +1,10 @@
 (ns io.github.rutledgepaulv.io.pipes
   (:require [clojure.java.io :as io]
             [io.github.rutledgepaulv.io.protocols :as protos]
-            [clojure.java.shell :as shell])
+            [clojure.string :as strings])
   (:import (java.io InputStream OutputStream PipedInputStream PipedOutputStream)
            (java.security DigestInputStream MessageDigest)
-           (java.util Scanner)
+           (java.util Base64 Scanner)
            (java.util.zip DeflaterOutputStream GZIPInputStream GZIPOutputStream InflaterInputStream)))
 
 
@@ -76,13 +76,51 @@
               (.write ^OutputStream out (.getBytes line "UTF-8"))
               (.write ^OutputStream out (int \newline)))))))))
 
-
-(defn sh [command]
+(defn sed [match replacement]
   (fn [source sink]
-    (with-open [out (protos/->output-stream sink)]
-      (let [process (shell/sh command)
-            in (.getInputStream process)]
-        (io/copy in out)))))
+    (with-open [in  (protos/->input-stream source)
+                out (protos/->output-stream sink)]
+      (let [scanner (Scanner. ^InputStream in "UTF-8")]
+        (while (.hasNextLine scanner)
+          (let [line (strings/replace (.nextLine scanner) match replacement)]
+            (.write ^OutputStream out (.getBytes line "UTF-8"))
+            (.write ^OutputStream out (int \newline))))))))
+
+(defn head [n]
+  (fn [source sink]
+    (with-open [in  (protos/->input-stream source)
+                out (protos/->output-stream sink)]
+      (let [scanner (Scanner. ^InputStream in "UTF-8")]
+        (loop [i 0]
+          (when (and (.hasNextLine scanner) (< i n))
+            (let [line (.nextLine scanner)]
+              (.write ^OutputStream out (.getBytes line "UTF-8"))
+              (.write ^OutputStream out (int \newline))
+              (recur (inc i)))))))))
+
+(defn base64-encode [source sink]
+  (with-open [in  (protos/->input-stream source)
+              out (.wrap (Base64/getEncoder)
+                         (protos/->output-stream sink))]
+    (io/copy in out)))
+
+(defn base64-url-encode [source sink]
+  (with-open [in  (protos/->input-stream source)
+              out (.wrap (Base64/getUrlEncoder)
+                         (protos/->output-stream sink))]
+    (io/copy in out)))
+
+(defn base64-decode [source sink]
+  (with-open [in  (.wrap (Base64/getDecoder)
+                         (protos/->input-stream source))
+              out (protos/->output-stream sink)]
+    (io/copy in out)))
+
+(defn base64-url-decode [source sink]
+  (with-open [in  (.wrap (Base64/getUrlDecoder)
+                         (protos/->input-stream source))
+              out (protos/->output-stream sink)]
+    (io/copy in out)))
 
 (defn chain
   ([pipe1]

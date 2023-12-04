@@ -1,9 +1,9 @@
 (ns io.github.rutledgepaulv.io.protocols
   (:require [clojure.java.io :as io])
-  (:import (java.io ByteArrayInputStream ByteArrayOutputStream File InputStream OutputStream)
+  (:import (java.io ByteArrayInputStream ByteArrayOutputStream File InputStream OutputStream Writer)
            (java.net URI URL)
            (java.nio.file Path)
-           (java.util.zip ZipEntry ZipInputStream)))
+           (java.util.zip ZipEntry)))
 
 
 (defprotocol IntoPath
@@ -26,10 +26,6 @@
   (->output-stream [x]
     "Converts argument into an output stream."))
 
-(defprotocol IntoZipInputStream
-  (->zip-input-stream [x]
-    "Converts argument into a zip input stream."))
-
 (defprotocol IntoData
   (->data [x]
     "Converts argument into plain clojure data."))
@@ -50,14 +46,6 @@
      :last-access-time   (.getLastAccessTime x)
      :last-modified-time (.getLastModifiedTime x)}))
 
-(extend-protocol IntoZipInputStream
-  nil
-  (->zip-input-stream [x] (ZipInputStream. (->input-stream x)))
-  ZipInputStream
-  (->zip-input-stream [x] x)
-  Object
-  (->zip-input-stream [x] (ZipInputStream. (->input-stream x))))
-
 (extend-protocol IntoInputStream
   nil
   (->input-stream [x] (InputStream/nullInputStream))
@@ -68,8 +56,10 @@
   String
   (->input-stream [x] (->input-stream (->bytes x)))
   Path
-  (->input-stream [x] (io/input-stream (.toFile x)))
-  ^"[B"
+  (->input-stream [x] (io/input-stream (.toFile x))))
+
+(extend-protocol IntoInputStream
+  (class (byte-array 0))
   (->input-stream [x] (ByteArrayInputStream. x)))
 
 (extend-protocol IntoOutputStream
@@ -79,8 +69,6 @@
   (->output-stream [x] x)
   File
   (->output-stream [x] (io/output-stream x))
-  String
-  (->output-stream [x] (->output-stream (->bytes x)))
   Path
   (->output-stream [x] (->output-stream (->file x))))
 
