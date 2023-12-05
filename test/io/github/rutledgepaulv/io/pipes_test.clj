@@ -47,3 +47,6 @@
   (is (= "testing\ndog\nmuffin\n" (output-str "testing\ndog\nmuffin\nthing" (pipes/head 3))))
   (is (= "testing\ndog\nmuffin\nthing\n" (output-str "testing\ndog\nmuffin\nthing" (pipes/head 4))))
   (is (= "testing\ndog\nmuffin\nthing\n" (output-str "testing\ndog\nmuffin\nthing" (pipes/head 5)))))
+
+(deftest sh-test
+  (is (= "testing" (output-str "testing" (pipes/sh {} "cat")))))

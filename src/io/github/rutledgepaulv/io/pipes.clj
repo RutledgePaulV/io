@@ -1,7 +1,8 @@
 (ns io.github.rutledgepaulv.io.pipes
   (:require [clojure.java.io :as io]
-            [io.github.rutledgepaulv.io.protocols :as protos]
-            [clojure.string :as strings])
+            [clojure.java.process :as process]
+            [clojure.string :as strings]
+            [io.github.rutledgepaulv.io.protocols :as protos])
   (:import (java.io InputStream OutputStream PipedInputStream PipedOutputStream)
            (java.security DigestInputStream MessageDigest)
            (java.util Base64 Scanner)
@@ -97,6 +98,21 @@
               (.write ^OutputStream out (.getBytes line "UTF-8"))
               (.write ^OutputStream out (int \newline))
               (recur (inc i)))))))))
+
+(defn sh [{:keys [env dir]
+           :or   {env {} dir "."}}
+          & args]
+  (fn [source sink]
+    (let [proc (apply process/start
+                      {:dir dir
+                       :env (merge {} (System/getenv) env)}
+                      args)]
+      (future (with-open [in  (protos/->input-stream source)
+                          out (:in proc)]
+                (io/copy in out)))
+      (with-open [in  (:out proc)
+                  out (protos/->output-stream sink)]
+        (io/copy in out)))))
 
 (defn base64-encode [source sink]
   (with-open [in  (protos/->input-stream source)
