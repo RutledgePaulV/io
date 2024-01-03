@@ -1,6 +1,6 @@
 (ns io.github.rutledgepaulv.io.protocols
   (:require [clojure.java.io :as io])
-  (:import (java.io ByteArrayInputStream ByteArrayOutputStream File InputStream OutputStream Writer)
+  (:import (java.io ByteArrayInputStream ByteArrayOutputStream File InputStream OutputStream)
            (java.net URI URL)
            (java.nio.file Path)
            (java.util.zip ZipEntry)))
@@ -51,6 +51,10 @@
   (->input-stream [x] (InputStream/nullInputStream))
   InputStream
   (->input-stream [x] x)
+  URL
+  (->input-stream [x] (.openStream x))
+  URI
+  (->input-stream [x] (->input-stream (.toURL x)))
   File
   (->input-stream [x] (io/input-stream x))
   String

@@ -5,7 +5,7 @@
             [io.github.rutledgepaulv.io.protocols :as protos])
   (:import (java.io InputStream OutputStream PipedInputStream PipedOutputStream)
            (java.security DigestInputStream MessageDigest)
-           (java.util Base64 Scanner)
+           (java.util Base64 Base64$Decoder Base64$Encoder Scanner)
            (java.util.zip DeflaterOutputStream GZIPInputStream GZIPOutputStream InflaterInputStream)))
 
 
@@ -33,38 +33,41 @@
      out (protos/->output-stream sink)]
     (io/copy in out)))
 
-(defn make-digest-pipe [algorithm]
-  (fn [source sink]
-    (let [digest (MessageDigest/getInstance algorithm)]
-      (with-open [input-stream  (protos/->input-stream source)
-                  digest-stream (DigestInputStream. input-stream digest)
-                  output-stream (protos/->output-stream sink)]
-        (io/copy digest-stream output-stream))
-      (.digest digest))))
+(defn digest [algorithm]
+  (fn pipe
+    ([source]
+     (pipe source nil))
+    ([source sink]
+     (let [digest (MessageDigest/getInstance algorithm)]
+       (with-open [input-stream  (protos/->input-stream source)
+                   digest-stream (DigestInputStream. input-stream digest)
+                   output-stream (protos/->output-stream sink)]
+         (io/copy digest-stream output-stream))
+       (.digest digest)))))
 
 (defn md5
   ([source]
    (md5 source nil))
   ([source sink]
-   ((make-digest-pipe "MD5") source sink)))
+   ((digest "MD5") source sink)))
 
 (defn sha1
   ([source]
    (sha1 source nil))
   ([source sink]
-   ((make-digest-pipe "SHA-1") source sink)))
+   ((digest "SHA-1") source sink)))
 
 (defn sha256
   ([source]
    (sha256 source nil))
   ([source sink]
-   ((make-digest-pipe "SHA-256") source sink)))
+   ((digest "SHA-256") source sink)))
 
 (defn sha512
   ([source]
    (sha512 source nil))
   ([source sink]
-   ((make-digest-pipe "SHA-512") source sink)))
+   ((digest "SHA-512") source sink)))
 
 (defn grep [pattern]
   (fn [source sink]
@@ -114,29 +117,27 @@
                   out (protos/->output-stream sink)]
         (io/copy in out)))))
 
-(defn base64-encode [source sink]
-  (with-open [in  (protos/->input-stream source)
-              out (.wrap (Base64/getEncoder)
-                         (protos/->output-stream sink))]
-    (io/copy in out)))
+(defn base64-encode
+  ([] (base64-encode {}))
+  ([{:keys [url unpadded]
+     :or   {url false unpadded false}}]
+   (let [encoder
+         ^Base64$Encoder
+         (cond-> (if url (Base64/getUrlEncoder) (Base64/getEncoder))
+           unpadded (.withoutPadding))]
+     (fn [source sink]
+       (with-open [in  (protos/->input-stream source)
+                   out (.wrap encoder (protos/->output-stream sink))]
+         (io/copy in out))))))
 
-(defn base64-url-encode [source sink]
-  (with-open [in  (protos/->input-stream source)
-              out (.wrap (Base64/getUrlEncoder)
-                         (protos/->output-stream sink))]
-    (io/copy in out)))
-
-(defn base64-decode [source sink]
-  (with-open [in  (.wrap (Base64/getDecoder)
-                         (protos/->input-stream source))
-              out (protos/->output-stream sink)]
-    (io/copy in out)))
-
-(defn base64-url-decode [source sink]
-  (with-open [in  (.wrap (Base64/getUrlDecoder)
-                         (protos/->input-stream source))
-              out (protos/->output-stream sink)]
-    (io/copy in out)))
+(defn base64-decode
+  ([] (base64-decode {}))
+  ([{:keys [url] :or {url false}}]
+   (let [decoder ^Base64$Decoder (if url (Base64/getUrlDecoder) (Base64/getDecoder))]
+     (fn [source sink]
+       (with-open [in  (.wrap decoder (protos/->input-stream source))
+                   out (protos/->output-stream sink)]
+         (io/copy in out))))))
 
 (defn chain
   ([pipe1]
@@ -155,12 +156,18 @@
                         output (PipedOutputStream.)]
                     (.connect input output)
                     (future
-                      (with-open
-                        [source (protos/->input-stream source)
-                         sink   output]
-                        (deliver p1 (pipe1 source sink))))
+                      (try
+                        (with-open
+                          [source (protos/->input-stream source)
+                           sink   output]
+                          (deliver p1 (pipe1 source sink)))
+                        (catch Exception e
+                          (deliver p1 e))))
                     input)]
-          (deliver p2 (pipe2 source sink)))
+          (try
+            (deliver p2 (pipe2 source sink))
+            (catch Exception e
+              (deliver p2 e))))
         (flatten [(deref p1) (deref p2)])))))
   ([pipe1 pipe2 & pipes]
    (reduce chain (cons pipe1 (cons pipe2 pipes)))))

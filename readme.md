@@ -27,7 +27,8 @@ Pipes are functions that take a source and a sink and may or may not return a re
     pipes/gzip))
 
 (pipeline (io/file "input.txt") (io/file "output.txt"))
-; (nil nil #object["[B" 0x49828df7 "[B@49828df7"] nil)
+; results of each pipe are returned positionally when using chain
+; (nil nil nil #object["[B" 0x49828df7 "[B@49828df7"] nil)
 ```
 
 ---

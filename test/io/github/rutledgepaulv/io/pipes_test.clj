@@ -9,21 +9,23 @@
 (defn round-trips? [source & pipes]
   (let [sink (ByteArrayOutputStream.)]
     ((apply pipes/chain pipes) source sink)
-    (Arrays/equals ^bytes (protos/->bytes source) ^bytes (.toByteArray sink))))
+    (Arrays/equals
+      ^"[B" (protos/->bytes source)
+      ^"[B" (protos/->bytes sink))))
 
 (defn output-str [source & pipes]
   (let [sink (ByteArrayOutputStream.)]
     ((apply pipes/chain pipes) source sink)
-    (String. (.toByteArray sink) "UTF-8")))
+    (encodings/bytes->string (protos/->bytes sink))))
 
 (deftest round-trip-test
   (is (round-trips? "testing" pipes/gzip pipes/gunzip))
   (is (round-trips? "testing" pipes/deflate pipes/inflate))
-  (is (round-trips? "testing" pipes/base64-encode pipes/base64-decode))
-  (is (round-trips? "testing" pipes/base64-url-encode pipes/base64-url-decode)))
+  (is (round-trips? "testing" (pipes/base64-encode) (pipes/base64-decode)))
+  (is (round-trips? "testing" (pipes/base64-encode {:url true}) (pipes/base64-decode {:url true}))))
 
 (deftest chaining-test
-  (let [pipe (pipes/chain pipes/base64-encode pipes/gzip pipes/md5)
+  (let [pipe (pipes/chain (pipes/base64-encode) pipes/gzip pipes/md5)
         [_ _ md5] (pipe "testing")]
     (is (= "7f1c229637fb7363e9acd3601efcb224" (encodings/bytes->hex md5)))))
 
