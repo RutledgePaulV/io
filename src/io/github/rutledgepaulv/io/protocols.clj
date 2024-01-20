@@ -1,8 +1,11 @@
 (ns io.github.rutledgepaulv.io.protocols
-  (:require [clojure.java.io :as io])
+  (:require [clojure.java.io :as io]
+            [clojure.string :as string]
+            [io.github.rutledgepaulv.io.constants :as constants])
   (:import (java.io ByteArrayInputStream ByteArrayOutputStream File InputStream OutputStream)
            (java.net URI URL)
            (java.nio.file Path)
+           (java.util.regex Pattern)
            (java.util.zip ZipEntry)))
 
 
@@ -10,9 +13,17 @@
   (->path [x]
     "Converts argument into a java.nio.file.Path object."))
 
+(defprotocol IntoPathPattern
+  (->path-pattern [x]
+    "Converts argument into a path pattern object."))
+
 (defprotocol IntoFile
   (->file [x]
     "Converts argument into a java.io.File object."))
+
+(defprotocol IntoString
+  (->string [x]
+    "Converts argument into a java.lang.String object."))
 
 (defprotocol IntoByteArray
   (->bytes [x]
@@ -29,6 +40,35 @@
 (defprotocol IntoData
   (->data [x]
     "Converts argument into plain clojure data."))
+
+(defprotocol FMap
+  (fmap [x f]
+    "Applies f and converts back into the original type."))
+
+(extend-protocol FMap
+  File
+  (fmap [x f]
+    (->file (f x)))
+  String
+  (fmap [x f]
+    (->string (f x)))
+  Path
+  (fmap [x f]
+    (->path (f x))))
+
+(extend-protocol IntoPathPattern
+  Pattern
+  (->path-pattern [x]
+    (str "regex:" (->string x)))
+  String
+  (->path-pattern [x]
+    (cond
+      (string/starts-with? x "regex:")
+      x
+      (string/starts-with? x "glob:")
+      x
+      :else
+      (str "glob:" x))))
 
 (extend-protocol IntoData
   nil
@@ -76,11 +116,19 @@
   Path
   (->output-stream [x] (->output-stream (->file x))))
 
+(extend-protocol IntoString
+  Object
+  (->string [x] (str x))
+  Pattern
+  (->string [x]
+    ; TODO: add flags (if any)
+    (str x)))
+
 (extend-protocol IntoPath
   File
   (->path [x] (.toPath x))
   String
-  (->path [x] (Path/of x (into-array String [])))
+  (->path [x] (Path/of x constants/String0))
   URI
   (->path [x] (Path/of x))
   URL
