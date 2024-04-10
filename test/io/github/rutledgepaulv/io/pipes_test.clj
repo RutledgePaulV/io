@@ -19,25 +19,25 @@
     (encodings/bytes->string (protos/->bytes sink))))
 
 (deftest round-trip-test
-  (is (round-trips? "testing" pipes/gzip pipes/gunzip))
-  (is (round-trips? "testing" pipes/deflate pipes/inflate))
+  (is (round-trips? "testing" (pipes/gzip) (pipes/gunzip)))
+  (is (round-trips? "testing" (pipes/deflate) (pipes/inflate)))
   (is (round-trips? "testing" (pipes/base64-encode) (pipes/base64-decode)))
   (is (round-trips? "testing" (pipes/base64-encode {:url true}) (pipes/base64-decode {:url true}))))
 
 (deftest chaining-test
-  (let [pipe (pipes/chain (pipes/base64-encode) pipes/gzip pipes/md5)
+  (let [pipe (pipes/chain (pipes/base64-encode) (pipes/gzip) (pipes/md5))
         [_ _ md5] (pipe "testing")]
     (is (= "7f1c229637fb7363e9acd3601efcb224" (encodings/bytes->hex md5)))))
 
 (deftest hashing-test
   (is (= "ae2b1fca515949e5d54fb22b8ed95575"
-         (encodings/bytes->hex (pipes/md5 "testing"))))
+         (encodings/bytes->hex ((pipes/md5) "testing"))))
   (is (= "dc724af18fbdd4e59189f5fe768a5f8311527050"
-         (encodings/bytes->hex (pipes/sha1 "testing"))))
+         (encodings/bytes->hex ((pipes/sha1) "testing"))))
   (is (= "cf80cd8aed482d5d1527d7dc72fceff84e6326592848447d2dc0b0e87dfc9a90"
-         (encodings/bytes->hex (pipes/sha256 "testing"))))
+         (encodings/bytes->hex ((pipes/sha256) "testing"))))
   (is (= "521b9ccefbcd14d179e7a1bb877752870a6d620938b28a66a107eac6e6805b9d0989f45b5730508041aa5e710847d439ea74cd312c9355f1f2dae08d40e41d50"
-         (encodings/bytes->hex (pipes/sha512 "testing")))))
+         (encodings/bytes->hex ((pipes/sha512) "testing")))))
 
 (deftest grepping-test
   (is (= "testing\nmuffin\n" (output-str "testing\ndog\nmuffin\nthing" (pipes/grep #"test|muffin")))))

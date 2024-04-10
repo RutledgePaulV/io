@@ -6,34 +6,50 @@
   (:import (java.io InputStream OutputStream PipedInputStream PipedOutputStream)
            (java.security DigestInputStream MessageDigest)
            (java.util Base64 Base64$Decoder Base64$Encoder Scanner)
-           (java.util.zip DeflaterOutputStream GZIPInputStream GZIPOutputStream InflaterInputStream)))
+           (java.util.zip Deflater DeflaterOutputStream GZIPInputStream GZIPOutputStream Inflater InflaterInputStream)))
 
 
-(defn gzip [source sink]
-  (with-open
-    [in  (protos/->input-stream source)
-     out (GZIPOutputStream. (protos/->output-stream sink))]
-    (io/copy in out)))
+(defn gzip
+  ([] (gzip {}))
+  ([{:keys [buffer-size sync-flush]
+     :or   {buffer-size 4096 sync-flush false}}]
+   (fn pipe [source sink]
+     (with-open
+       [in  (protos/->input-stream source)
+        out (GZIPOutputStream. (protos/->output-stream sink) (int buffer-size) sync-flush)]
+       (io/copy in out)))))
 
-(defn gunzip [source sink]
-  (with-open
-    [in  (GZIPInputStream. (protos/->input-stream source))
-     out (protos/->output-stream sink)]
-    (io/copy in out)))
+(defn gunzip
+  ([] (gunzip {}))
+  ([{:keys [buffer-size]
+     :or   {buffer-size 4096}}]
+   (fn pipe [source sink]
+     (with-open
+       [in  (GZIPInputStream. (protos/->input-stream source) (int buffer-size))
+        out (protos/->output-stream sink)]
+       (io/copy in out)))))
 
-(defn deflate [source sink]
-  (with-open
-    [in  (protos/->input-stream source)
-     out (DeflaterOutputStream. (protos/->output-stream sink))]
-    (io/copy in out)))
+(defn deflate
+  ([] (deflate {}))
+  ([{:keys [buffer-size sync-flush]
+     :or   {buffer-size 4096 sync-flush false}}]
+   (fn pipe [source sink]
+     (with-open
+       [in  (protos/->input-stream source)
+        out (DeflaterOutputStream. (protos/->output-stream sink) (Deflater.) (int buffer-size) sync-flush)]
+       (io/copy in out)))))
 
-(defn inflate [source sink]
-  (with-open
-    [in  (InflaterInputStream. (protos/->input-stream source))
-     out (protos/->output-stream sink)]
-    (io/copy in out)))
+(defn inflate
+  ([] (inflate {}))
+  ([{:keys [buffer-size]
+     :or   {buffer-size 4096}}]
+   (fn pipe [source sink]
+     (with-open
+       [in  (InflaterInputStream. (protos/->input-stream source) (Inflater.) (int buffer-size))
+        out (protos/->output-stream sink)]
+       (io/copy in out)))))
 
-(defn digest [algorithm]
+(defn digest [{:keys [algorithm]}]
   (fn pipe
     ([source]
      (pipe source nil))
@@ -45,29 +61,17 @@
          (io/copy digest-stream output-stream))
        (.digest digest)))))
 
-(defn md5
-  ([source]
-   (md5 source nil))
-  ([source sink]
-   ((digest "MD5") source sink)))
+(defn md5 []
+  (digest {:algorithm "MD5"}))
 
-(defn sha1
-  ([source]
-   (sha1 source nil))
-  ([source sink]
-   ((digest "SHA-1") source sink)))
+(defn sha1 []
+  (digest {:algorithm "SHA-1"}))
 
-(defn sha256
-  ([source]
-   (sha256 source nil))
-  ([source sink]
-   ((digest "SHA-256") source sink)))
+(defn sha256 []
+  (digest {:algorithm "SHA-256"}))
 
-(defn sha512
-  ([source]
-   (sha512 source nil))
-  ([source sink]
-   ((digest "SHA-512") source sink)))
+(defn sha512 []
+  (digest {:algorithm "SHA-512"}))
 
 (defn grep [pattern]
   (fn [source sink]
